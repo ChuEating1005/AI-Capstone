@@ -1,0 +1,19 @@
+Test Accuracy: 0.9192
+
+Classification Report:
+              precision    recall  f1-score   support
+
+         bag       0.89      0.80      0.84        10
+       dress       0.91      1.00      0.95        10
+     glasses       0.91      1.00      0.95        10
+         hat       1.00      1.00      1.00        10
+      hoodie       1.00      0.78      0.88         9
+      jacket       0.90      0.90      0.90        10
+       pants       0.91      1.00      0.95        10
+       shoes       0.83      1.00      0.91        10
+        sock       1.00      0.80      0.89        10
+     t-shirt       0.90      0.90      0.90        10
+
+    accuracy                           0.92        99
+   macro avg       0.92      0.92      0.92        99
+weighted avg       0.92      0.92      0.92        99
