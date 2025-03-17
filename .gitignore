@@ -2,7 +2,4 @@ __pycache__
 *.pyc
 *.pkl
 *.pth
-*.png
-*.jpg
-*.jpeg
 Project1/results/*
