@@ -1,0 +1,20 @@
+Best parameters: {'svm__C': 10, 'svm__degree': 2, 'svm__gamma': 'scale', 'svm__kernel': 'rbf'}
+Test accuracy: 0.7374
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.88      0.70      0.78        10
+           1       1.00      0.60      0.75        10
+           2       0.89      0.80      0.84        10
+           3       0.70      0.70      0.70        10
+           4       0.54      0.78      0.64         9
+           5       0.50      0.60      0.55        10
+           6       0.91      1.00      0.95        10
+           7       0.71      1.00      0.83        10
+           8       0.75      0.60      0.67        10
+           9       0.75      0.60      0.67        10
+
+    accuracy                           0.74        99
+   macro avg       0.76      0.74      0.74        99
+weighted avg       0.76      0.74      0.74        99

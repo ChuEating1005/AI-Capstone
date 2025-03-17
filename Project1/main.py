@@ -57,7 +57,7 @@ def train_kmeans():
     print("="*60)
     
     start_time = time.time()
-    clusterer = KMeansClusterer(data_dir='data', n_clusters=10)
+    clusterer = KMeansClusterer(data_dir='data')
     clusterer.train()
     end_time = time.time()
     

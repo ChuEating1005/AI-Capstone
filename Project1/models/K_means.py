@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import silhouette_score, adjusted_rand_score
+from sklearn.metrics import silhouette_score, adjusted_rand_score, calinski_harabasz_score, davies_bouldin_score
 import seaborn as sns
 from PIL import Image
 import joblib
@@ -35,53 +35,53 @@ class KMeansClusterer:
         try:
             # Load and resize image
             img = Image.open(img_path).convert('RGB')
-            img = img.resize((128, 128))  # 增加圖片尺寸以保留更多細節
+            img = img.resize((128, 128))  # Increase image size to preserve more details
             img_array = np.array(img)
             
             # 1. Enhanced Color Features
-            # 使用HSV色彩空間
+            # Use HSV color space
             img_hsv = cv2.cvtColor(img_array, cv2.COLOR_RGB2HSV)
             
-            # 計算HSV直方圖
+            # Calculate HSV histograms
             hist_h = np.histogram(img_hsv[:,:,0], bins=16)[0]
             hist_s = np.histogram(img_hsv[:,:,1], bins=16)[0]
             hist_v = np.histogram(img_hsv[:,:,2], bins=16)[0]
             
-            # 顏色統計
+            # Color statistics
             color_stats = np.concatenate([
                 np.mean(img_hsv, axis=(0,1)),
                 np.std(img_hsv, axis=(0,1))
             ])
             
-            # 2. 改進的紋理特徵
+            # 2. Improved texture features
             gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
             
-            # 使用不同尺度的LBP
+            # Use different scales of LBP
             lbp_features = []
             for radius in [1, 2, 3]:
                 lbp = local_binary_pattern(gray, P=8*radius, R=radius, method='uniform')
                 lbp_hist = np.histogram(lbp, bins=10)[0]
                 lbp_features.extend(lbp_hist)
             
-            # 3. 改進的形狀特徵
-            # 使用更密集的HOG特徵
+            # 3. Improved shape features
+            # Use denser HOG features
             hog_features = hog(gray, 
                              orientations=9,
                              pixels_per_cell=(16, 16),
                              cells_per_block=(2, 2),
                              visualize=False)
             
-            # 4. 邊緣特徵
+            # 4. Edge features
             edges = cv2.Canny(gray, 100, 200)
             edge_hist = np.histogram(edges, bins=16)[0]
             
-            # 組合所有特徵
+            # Combine all features
             features = np.concatenate([
-                hist_h/hist_h.sum(), hist_s/hist_s.sum(), hist_v/hist_v.sum(),  # 正規化的顏色直方圖
-                color_stats,                                                     # HSV統計
-                np.array(lbp_features)/sum(lbp_features),                       # 正規化的LBP特徵
-                hog_features/np.linalg.norm(hog_features),                      # 正規化的HOG特徵
-                edge_hist/edge_hist.sum()                                       # 正規化的邊緣特徵
+                hist_h/hist_h.sum(), hist_s/hist_s.sum(), hist_v/hist_v.sum(),  # Normalized color histograms
+                color_stats,                                                     # HSV statistics
+                np.array(lbp_features)/sum(lbp_features),                       # Normalized LBP features
+                hog_features/np.linalg.norm(hog_features),                      # Normalized HOG features
+                edge_hist/edge_hist.sum()                                       # Normalized edge features
             ])
             
             return features
@@ -119,41 +119,109 @@ class KMeansClusterer:
         return np.array(X), np.array(y), img_paths
     
     def train(self):
-        """改進的訓練過程"""
-        # 載入數據
+        """Improved training process"""
+        # Load data
         X, y_true, img_paths = self.load_data()
         
-        # 特徵選擇
+        # Feature selection
         selector = SelectKBest(score_func=mutual_info_classif, k=100)
         X_selected = selector.fit_transform(X, y_true)
         
-        # 標準化
+        # Standardization
         self.scaler = StandardScaler()
         X_scaled = self.scaler.fit_transform(X_selected)
         
-        # 使用UMAP進行降維
-        self.reducer = umap.UMAP(n_components=30, random_state=42)
+        # Use UMAP for dimensionality reduction
+        self.reducer = umap.UMAP(n_components=30)
         X_reduced = self.reducer.fit_transform(X_scaled)
         
-        # 嘗試不同的聚類數量
+        # Try different numbers of clusters
         silhouette_scores = []
-        k_range = range(8, 13)
+        ari_scores = []
+        ch_scores = []
+        db_scores = []
+        k_range = list(range(2, 21))  # Integers from 2 to 20
         
+        # Create plot
+        plt.figure(figsize=(15, 10))
+        
+        # Cluster for each K value and calculate metrics
         for k in k_range:
             kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
             labels = kmeans.fit_predict(X_reduced)
-            score = silhouette_score(X_reduced, labels)
-            silhouette_scores.append(score)
+            
+            # Calculate metrics
+            silhouette = silhouette_score(X_reduced, labels)
+            ari = adjusted_rand_score(y_true, labels)
+            ch = calinski_harabasz_score(X_reduced, labels)
+            db = davies_bouldin_score(X_reduced, labels)
+            
+            silhouette_scores.append(silhouette)
+            ari_scores.append(ari)
+            ch_scores.append(ch)
+            db_scores.append(db)
+            
+            print(f"K={k}, Silhouette Score: {silhouette:.4f}, ARI: {ari:.4f}, CH: {ch:.4f}, DB: {db:.4f}")
         
-        # 選擇最佳的聚類數量
-        best_k = k_range[np.argmax(silhouette_scores)]
-        print(f"Best number of clusters: {best_k}")
+
         
-        # 使用最佳的聚類數量訓練最終模型
-        self.model = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+        # Silhouette Score
+        plt.subplot(2, 2, 1)
+        plt.plot(k_range, silhouette_scores, 'bo-')
+        plt.xlabel('Number of Clusters (K)')
+        plt.ylabel('Silhouette Score')
+        plt.title('Silhouette Score vs K\n(Higher is better)')
+        plt.grid(True)
+        plt.xticks(k_range, k_range)  # Set x-axis ticks to integers
+        
+        # ARI Score
+        plt.subplot(2, 2, 2)
+        plt.plot(k_range, ari_scores, 'ro-')
+        plt.xlabel('Number of Clusters (K)')
+        plt.ylabel('Adjusted Rand Index')
+        plt.title('Adjusted Rand Index vs K\n(Higher is better)')
+        plt.grid(True)
+        plt.xticks(k_range, k_range)
+        
+        # Calinski-Harabasz Score
+        plt.subplot(2, 2, 3)
+        plt.plot(k_range, ch_scores, 'go-')
+        plt.xlabel('Number of Clusters (K)')
+        plt.ylabel('Calinski-Harabasz Score')
+        plt.title('Calinski-Harabasz Score vs K\n(Higher is better)')
+        plt.grid(True)
+        plt.xticks(k_range, k_range)
+        
+        # Davies-Bouldin Score
+        plt.subplot(2, 2, 4)
+        plt.plot(k_range, db_scores, 'mo-')
+        plt.xlabel('Number of Clusters (K)')
+        plt.ylabel('Davies-Bouldin Score')
+        plt.title('Davies-Bouldin Score vs K\n(Lower is better)')
+        plt.grid(True)
+        plt.xticks(k_range, k_range)
+        
+        plt.tight_layout()
+        plt.savefig('plots/kmeans_metrics_comparison.png')
+        
+        # Find best K value for each metric
+        best_k_silhouette = k_range[np.argmax(silhouette_scores)]
+        best_k_ari = k_range[np.argmax(ari_scores)]
+        best_k_ch = k_range[np.argmax(ch_scores)]
+        best_k_db = k_range[np.argmin(db_scores)]  # Note: Lower DB score is better
+        
+        print("\nBest K values by different metrics:")
+        print(f"Silhouette Score: K={best_k_silhouette}")
+        print(f"Adjusted Rand Index: K={best_k_ari}")
+        print(f"Calinski-Harabasz Score: K={best_k_ch}")
+        print(f"Davies-Bouldin Score: K={best_k_db}")
+        
+        # Use best K value (using best K from ARI score here)
+        self.n_clusters = best_k_ari
+        self.model = KMeans(n_clusters=self.n_clusters, random_state=42, n_init=10)
         cluster_labels = self.model.fit_predict(X_reduced)
         
-        # 評估和可視化
+        # Evaluate and visualize
         self._visualize_clusters(X_reduced, cluster_labels, y_true)
         self._analyze_clusters(cluster_labels, y_true)
         metrics = self.evaluate_clustering(X_reduced, cluster_labels, y_true)
@@ -193,9 +261,14 @@ class KMeansClusterer:
         # Create a mapping from cluster labels to true labels
         cluster_to_label = {}
         
-        for cluster_id in range(self.n_clusters):
+        for cluster_id in range(max(cluster_labels) + 1):  # Use actual cluster labels instead of self.n_clusters
             # Get indices of samples in this cluster
             indices = np.where(cluster_labels == cluster_id)[0]
+            
+            # Skip empty clusters
+            if len(indices) == 0:
+                print(f"\nCluster {cluster_id} is empty")
+                continue
             
             # Get true labels of these samples
             true_labels = y_true[indices]
@@ -214,7 +287,8 @@ class KMeansClusterer:
                 print(f"  {self.class_names[label]}: {count} samples ({percentage:.2f}%)")
         
         # Create confusion matrix-like visualization
-        confusion = np.zeros((self.n_clusters, len(self.class_names)))
+        n_clusters = max(cluster_labels) + 1
+        confusion = np.zeros((n_clusters, len(self.class_names)))
         
         for i in range(len(cluster_labels)):
             cluster = cluster_labels[i]
@@ -222,7 +296,7 @@ class KMeansClusterer:
             confusion[cluster, true_label] += 1
         
         # Normalize by cluster size
-        for i in range(self.n_clusters):
+        for i in range(n_clusters):
             if np.sum(confusion[i, :]) > 0:
                 confusion[i, :] = confusion[i, :] / np.sum(confusion[i, :])
         
@@ -230,7 +304,7 @@ class KMeansClusterer:
         plt.figure(figsize=(12, 10))
         sns.heatmap(confusion, annot=True, fmt='.2f', cmap='Blues',
                    xticklabels=self.class_names,
-                   yticklabels=[f'Cluster {i}' for i in range(self.n_clusters)])
+                   yticklabels=[f'Cluster {i}' for i in range(n_clusters)])
         plt.xlabel('True Class')
         plt.ylabel('Cluster')
         plt.title('Cluster Composition')
