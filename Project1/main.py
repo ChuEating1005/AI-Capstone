@@ -18,16 +18,17 @@ def train_resnet():
     print("="*60)
     
     start_time = time.time()
-    trainer = ResNetTrainer(data_dir='data', batch_size=32, num_epochs=20)
+    trainer = ResNetTrainer(data_dir='data', batch_size=32, num_epochs=20, seed=40)
     trainer.train()
     accuracy, _ = trainer.evaluate()
     trainer.plot_training_history()
+    trainer.visualize_tsne_comparison()
     end_time = time.time()
     
     print(f"\nResNet training completed in {end_time - start_time:.2f} seconds")
-    print(f"Test accuracy: {accuracy:.4f}")
+    # print(f"Test accuracy: {accuracy:.4f}")
     
-    return accuracy
+    # return accuracy
 
 def train_svm():
     """Train the SVM model (supervised learning without DL)"""

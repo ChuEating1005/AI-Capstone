@@ -10,17 +10,16 @@ def main():
     OUTPUT_DIR = Path('data')
 
     # Define split ratios
-    TRAIN_RATIO = 0.7
-    VAL_RATIO = 0.2
-    TEST_RATIO = 0.1
+    TRAIN_RATIO = 0.8
+    VAL_RATIO = 0
+    TEST_RATIO = 0.2
 
     # Create output directories
     train_dir = OUTPUT_DIR / 'train'
-    val_dir = OUTPUT_DIR / 'valid'
     test_dir = OUTPUT_DIR / 'test'
 
     # Create directories if they don't exist
-    for dir_path in [train_dir, val_dir, test_dir]:
+    for dir_path in [train_dir, test_dir]:
         for category in os.listdir(SOURCE_DIR):
             if category.startswith('.'):  # Skip hidden files like .DS_Store
                 continue
@@ -47,22 +46,20 @@ def main():
         
         # Calculate split indices
         n_images = len(image_files)
-        n_train = 35
-        n_val = 10
+        n_train = 40
         
         # Split the files
         train_files = image_files[:n_train]
-        val_files = image_files[n_train:n_train + n_val]
-        test_files = image_files[n_train + n_val:]
+        test_files = image_files[n_train:]
         
         # Copy files to respective directories
-        for files, target_dir in zip([train_files, val_files, test_files], [train_dir, val_dir, test_dir]):
+        for files, target_dir in zip([train_files, test_files], [train_dir, test_dir]):
             for file in files:
                 src_path = category_dir / file
                 dst_path = target_dir / category / file
                 shutil.copy2(src_path, dst_path)
         
-        print(f"Category {category}: {len(train_files)} train, {len(val_files)} val, {len(test_files)} test")
+        print(f"Category {category}: {len(train_files)} train, {len(test_files)} test")
 
     print("Dataset preparation completed!")
 

@@ -11,6 +11,13 @@ import joblib
 from pathlib import Path
 from collections import Counter
 import pandas as pd
+from skimage.feature import local_binary_pattern
+from scipy.ndimage import sobel
+from skimage.feature import hog
+import cv2
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import mutual_info_classif
+import umap
 
 class KMeansClusterer:
     def __init__(self, data_dir='dataset', n_clusters=10):
@@ -23,33 +30,60 @@ class KMeansClusterer:
     
     def extract_features(self, img_path):
         """
-        Extract features from an image for clustering.
-        Similar to the SVM feature extraction but can be simpler.
+        Improved feature extraction with focus on clothing-specific characteristics
         """
         try:
             # Load and resize image
             img = Image.open(img_path).convert('RGB')
-            img = img.resize((64, 64))  # Resize for consistency
+            img = img.resize((128, 128))  # 增加圖片尺寸以保留更多細節
             img_array = np.array(img)
             
-            # Extract color histograms
-            hist_r = np.histogram(img_array[:,:,0], bins=32, range=(0, 256))[0]
-            hist_g = np.histogram(img_array[:,:,1], bins=32, range=(0, 256))[0]
-            hist_b = np.histogram(img_array[:,:,2], bins=32, range=(0, 256))[0]
+            # 1. Enhanced Color Features
+            # 使用HSV色彩空間
+            img_hsv = cv2.cvtColor(img_array, cv2.COLOR_RGB2HSV)
             
-            # Calculate mean and std of each channel
-            mean_r = np.mean(img_array[:,:,0])
-            mean_g = np.mean(img_array[:,:,1])
-            mean_b = np.mean(img_array[:,:,2])
-            std_r = np.std(img_array[:,:,0])
-            std_g = np.std(img_array[:,:,1])
-            std_b = np.std(img_array[:,:,2])
+            # 計算HSV直方圖
+            hist_h = np.histogram(img_hsv[:,:,0], bins=16)[0]
+            hist_s = np.histogram(img_hsv[:,:,1], bins=16)[0]
+            hist_v = np.histogram(img_hsv[:,:,2], bins=16)[0]
             
-            # Combine features
-            features = np.concatenate([
-                hist_r, hist_g, hist_b, 
-                [mean_r, mean_g, mean_b, std_r, std_g, std_b]
+            # 顏色統計
+            color_stats = np.concatenate([
+                np.mean(img_hsv, axis=(0,1)),
+                np.std(img_hsv, axis=(0,1))
             ])
+            
+            # 2. 改進的紋理特徵
+            gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+            
+            # 使用不同尺度的LBP
+            lbp_features = []
+            for radius in [1, 2, 3]:
+                lbp = local_binary_pattern(gray, P=8*radius, R=radius, method='uniform')
+                lbp_hist = np.histogram(lbp, bins=10)[0]
+                lbp_features.extend(lbp_hist)
+            
+            # 3. 改進的形狀特徵
+            # 使用更密集的HOG特徵
+            hog_features = hog(gray, 
+                             orientations=9,
+                             pixels_per_cell=(16, 16),
+                             cells_per_block=(2, 2),
+                             visualize=False)
+            
+            # 4. 邊緣特徵
+            edges = cv2.Canny(gray, 100, 200)
+            edge_hist = np.histogram(edges, bins=16)[0]
+            
+            # 組合所有特徵
+            features = np.concatenate([
+                hist_h/hist_h.sum(), hist_s/hist_s.sum(), hist_v/hist_v.sum(),  # 正規化的顏色直方圖
+                color_stats,                                                     # HSV統計
+                np.array(lbp_features)/sum(lbp_features),                       # 正規化的LBP特徵
+                hog_features/np.linalg.norm(hog_features),                      # 正規化的HOG特徵
+                edge_hist/edge_hist.sum()                                       # 正規化的邊緣特徵
+            ])
+            
             return features
         
         except Exception as e:
@@ -69,8 +103,8 @@ class KMeansClusterer:
         # Create class to index mapping
         class_to_idx = {cls_name: i for i, cls_name in enumerate(self.class_names)}
         
-        # Process all data (train, valid, test combined for unsupervised learning)
-        for split in ['train', 'valid', 'test']:
+        # Process all data (train, test combined for unsupervised learning)
+        for split in ['train', 'test']:
             for class_name in self.class_names:
                 class_dir = self.data_dir / split / class_name
                 for img_file in os.listdir(class_dir):
@@ -85,63 +119,44 @@ class KMeansClusterer:
         return np.array(X), np.array(y), img_paths
     
     def train(self):
-        """Train the K-means clustering model"""
-        # Load data
+        """改進的訓練過程"""
+        # 載入數據
         X, y_true, img_paths = self.load_data()
         
-        print(f"Data shape: {X.shape}")
+        # 特徵選擇
+        selector = SelectKBest(score_func=mutual_info_classif, k=100)
+        X_selected = selector.fit_transform(X, y_true)
         
-        # Scale the features
+        # 標準化
         self.scaler = StandardScaler()
-        X_scaled = self.scaler.fit_transform(X)
+        X_scaled = self.scaler.fit_transform(X_selected)
         
-        # Apply PCA for dimensionality reduction
-        self.pca = PCA(n_components=50)  # Reduce to 50 dimensions
-        X_pca = self.pca.fit_transform(X_scaled)
+        # 使用UMAP進行降維
+        self.reducer = umap.UMAP(n_components=30, random_state=42)
+        X_reduced = self.reducer.fit_transform(X_scaled)
         
-        print(f"PCA explained variance ratio: {np.sum(self.pca.explained_variance_ratio_):.4f}")
+        # 嘗試不同的聚類數量
+        silhouette_scores = []
+        k_range = range(8, 13)
         
-        # Find optimal number of clusters using silhouette score
-        if self.n_clusters is None:
-            silhouette_scores = []
-            range_n_clusters = range(2, 20)  # Try from 2 to 20 clusters
-            
-            for n_clusters in range_n_clusters:
-                kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-                cluster_labels = kmeans.fit_predict(X_pca)
-                silhouette_avg = silhouette_score(X_pca, cluster_labels)
-                silhouette_scores.append(silhouette_avg)
-                print(f"For n_clusters = {n_clusters}, silhouette score is {silhouette_avg:.4f}")
-            
-            # Plot silhouette scores
-            plt.figure(figsize=(10, 6))
-            plt.plot(range_n_clusters, silhouette_scores, 'o-')
-            plt.xlabel('Number of clusters')
-            plt.ylabel('Silhouette Score')
-            plt.title('Silhouette Score Method For Optimal k')
-            plt.savefig('kmeans_silhouette_scores.png')
-            
-            # Choose the best number of clusters
-            self.n_clusters = range_n_clusters[np.argmax(silhouette_scores)]
-            print(f"Optimal number of clusters: {self.n_clusters}")
+        for k in k_range:
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            labels = kmeans.fit_predict(X_reduced)
+            score = silhouette_score(X_reduced, labels)
+            silhouette_scores.append(score)
         
-        # Train K-means with the optimal/specified number of clusters
-        self.model = KMeans(n_clusters=self.n_clusters, random_state=42, n_init=10)
-        cluster_labels = self.model.fit_predict(X_pca)
+        # 選擇最佳的聚類數量
+        best_k = k_range[np.argmax(silhouette_scores)]
+        print(f"Best number of clusters: {best_k}")
         
-        # Save the model
-        joblib.dump((self.model, self.pca, self.scaler), 'kmeans_model.pkl')
+        # 使用最佳的聚類數量訓練最終模型
+        self.model = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+        cluster_labels = self.model.fit_predict(X_reduced)
         
-        # Evaluate clustering performance
-        if len(np.unique(y_true)) == self.n_clusters:
-            ari = adjusted_rand_score(y_true, cluster_labels)
-            print(f"Adjusted Rand Index: {ari:.4f}")
-        
-        # Visualize clusters in 2D
-        self._visualize_clusters(X_pca, cluster_labels, y_true)
-        
-        # Analyze cluster composition
+        # 評估和可視化
+        self._visualize_clusters(X_reduced, cluster_labels, y_true)
         self._analyze_clusters(cluster_labels, y_true)
+        metrics = self.evaluate_clustering(X_reduced, cluster_labels, y_true)
         
         return self.model
     
@@ -171,7 +186,7 @@ class KMeansClusterer:
         plt.ylabel('PCA Component 2')
         
         plt.tight_layout()
-        plt.savefig('kmeans_clusters_visualization.png')
+        plt.savefig('plots/kmeans_clusters_visualization.png')
     
     def _analyze_clusters(self, cluster_labels, y_true):
         """Analyze the composition of each cluster"""
@@ -220,7 +235,36 @@ class KMeansClusterer:
         plt.ylabel('Cluster')
         plt.title('Cluster Composition')
         plt.tight_layout()
-        plt.savefig('kmeans_cluster_composition.png')
+        plt.savefig('plots/kmeans_cluster_composition.png')
+
+    def evaluate_clustering(self, X_pca, cluster_labels, y_true):
+        """Evaluate the clustering performance"""
+        # 1. Calculate ARI
+        ari = adjusted_rand_score(y_true, cluster_labels)
+        print(f"Adjusted Rand Index: {ari:.4f}")
+        
+        # 2. Calculate Silhouette Score
+        silhouette_avg = silhouette_score(X_pca, cluster_labels)
+        print(f"Silhouette Score: {silhouette_avg:.4f}")
+        
+        # 3. Analyze the purity of each cluster
+        purities = []
+        for cluster_id in range(self.n_clusters):
+            indices = np.where(cluster_labels == cluster_id)[0]
+            if len(indices) > 0:
+                true_labels = y_true[indices]
+                most_common = Counter(true_labels).most_common(1)[0]
+                purity = most_common[1] / len(indices)
+                purities.append(purity)
+        
+        avg_purity = np.mean(purities)
+        print(f"Average Cluster Purity: {avg_purity:.4f}")
+        
+        return {
+            'ari': ari,
+            'silhouette': silhouette_avg,
+            'purity': avg_purity
+        }
 
 if __name__ == "__main__":
     clusterer = KMeansClusterer(data_dir='dataset', n_clusters=10)
