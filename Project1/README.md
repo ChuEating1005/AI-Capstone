@@ -25,13 +25,20 @@ The dataset contains 10 types of clothing items, with 50 images per category:
 Project1/
 ├── images/                  # Original dataset
 ├── dataset/                 # Processed dataset (created by prepare_dataset.py)
-│   ├── train/               # 70% of data
-│   ├── val/                 # 20% of data
-│   └── test/                # 10% of data
-├── prepare_dataset.py       # Script to split data into train/val/test
-├── resnet_model.py          # ResNet implementation (supervised DL)
-├── svm_model.py             # SVM implementation (supervised non-DL)
-├── kmeans_model.py          # K-means implementation (unsupervised)
+│   ├── train/               # 80% of data
+│   └── test/                # 20% of data
+├── models/                  # Model implementations
+│   ├── ResNet.py            # ResNet implementation
+│   ├── SVM.py               # SVM implementation
+│   └── K_means.py           # K-means implementation
+├── plots/                   # Generated visualizations
+│   ├── resnet_aug/          # ResNet results and plots with augmentation
+│   ├── resnet_noaug/        # ResNet results and plots without augmentation
+│   ├── svm_aug/             # SVM results with augmentation
+│   ├── svm_noaug/           # SVM results without augmentation
+│   └── kmeans/              # K-means clustering results
+├── dataset.py               # Dataset classes for loading and augmenting data
+├── prepare_dataset.py       # Script to split data into train/test
 ├── main.py                  # Main script to run all models
 └── requirements.txt         # Dependencies
 ```
@@ -67,8 +74,3 @@ python main.py --kmeans      # Run only K-means
 The models will generate various output files:
 - Model weights: `resnet_best_model.pth`, `svm_model.pkl`, `kmeans_model.pkl`
 - Visualizations: Confusion matrices, training curves, cluster visualizations
-
-## Author
-
-I-TING CHU (111550093)
-National Yang Ming Chiao Tung University (NYCU) 
