@@ -7,4 +7,4 @@
 |           | Topic                                                         | 
 |:---------:|:-------------------------------------------------------------:|
 | Project 1 | Dataset Preparation & Supervised and Unsupervised Learning    |
-
+| Project 2 | Reinforcement Learning                                        |
