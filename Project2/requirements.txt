@@ -1,0 +1,9 @@
+gymnasium>=0.29.1
+gymnasium[atari]>=0.29.1
+gymnasium[box2d]>=0.29.1
+gymnasium[classic_control]>=0.29.1
+stable-baselines3>=2.2.1
+torch>=2.0.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+pandas>=2.0.0 

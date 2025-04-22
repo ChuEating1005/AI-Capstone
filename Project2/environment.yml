@@ -1,0 +1,26 @@
+name: aic_project2
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - pytorch
+  - pytorch-cuda
+  - gymnasium
+  - matplotlib
+  - pandas
+  - swig
+  - pip:
+    - stable-baselines3[extra]
+    - ale-py
+    - gymnasium
+    - "gymnasium[atari,accept-rom-license]"
+    - "gymnasium[box2d]"
+    - "gymnasium[classic_control]"
+    - "gymnasium[other]"
+    - autorom
+    - autorom.accept-rom-license
+    - AutoROM[accept-rom-license]==0.6.1 
