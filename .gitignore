@@ -4,3 +4,4 @@ __pycache__
 *.pth
 Project1/results/*
 Project2/results/*
+Project2/videos/*
