@@ -1,4 +1,4 @@
-# Clothing Classification Project
+# Project1: Clothing Classification Project
 
 This project implements three different machine learning methods for clothing classification:
 1. ResNet (Deep Learning-based supervised learning)
