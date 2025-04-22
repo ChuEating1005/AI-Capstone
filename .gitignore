@@ -3,3 +3,4 @@ __pycache__
 *.pkl
 *.pth
 Project1/results/*
+Project2/results/*
